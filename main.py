@@ -1,7 +1,16 @@
 # main_spark.py
 import logging
+import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, year, month
+spark = SparkSession.builder \
+    .appName("Airflow-S3-Pipeline") \
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+    .config("spark.hadoop.fs.AbstractFileSystem.s3a.impl", "org.apache.hadoop.fs.s3a.S3A") \
+    .config("spark.hadoop.fs.s3a.access.key", "AWS_ACCESS_KEY_ID") \
+    .config("spark.hadoop.fs.s3a.secret.key", "AWS_SECRET_ACCESS_KEY") \
+    .config("spark.hadoop.fs.s3a.endpoint", "s3.amazonaws.com") \
+    .getOrCreate()
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
