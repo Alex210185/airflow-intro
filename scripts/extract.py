@@ -1,5 +1,4 @@
-#extract
-#import pandas as pd
+import pandas as pd
 import io
 import logging
 from s3_utils import get_s3_client
