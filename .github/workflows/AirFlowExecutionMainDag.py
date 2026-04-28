@@ -1,26 +1,18 @@
-# AirflowDag
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from datetime import datetime
-import logging
 
-# Import your pipeline runner from main.py
-from main import run_pipeline
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("pipeline_dag")
-
-# Define the DAG
 with DAG(
-    dag_id="pipeline_dag",             # Name shown in Airflow UI
-    start_date=datetime(2024, 1, 1),   # When scheduling starts
-    schedule_interval="@daily",        # Run once per day
-    catchup=False,                     # Do not backfill old runs
+    dag_id="pipeline_dag",
+    start_date=datetime(2024, 1, 1),
+    schedule_interval="@daily",
+    catchup=False,
 ) as dag:
 
-    # Single task: run your pipeline
-    run_pipeline_task = PythonOperator(
+    run_glue_pipeline = GlueJobOperator(
         task_id="run_pipeline",
-        python_callable=run_pipeline
+        job_name="customer-etl-job",
+        script_location="s3://airflow-intro-dags/plugins/scripts/main.py",
+        region_name="us-east-1",
+        aws_conn_id="aws_default",
     )
