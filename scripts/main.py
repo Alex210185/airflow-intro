@@ -1,55 +1,64 @@
-import logging
-from extraction.extract import read_csv_from_s3
-from extraction.validate import validate_customers, validate_items
-from s3_utils import write_dicts_to_s3_parquet
-from extraction.extract import read_csv_from_s3, list_bucket_objects
-from s3_utils import write_dicts_to_s3_parquet, write_items_partitioned
-# Configure logging for this module
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("pipeline")
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
 
-def run_pipeline():
-    
-    source_bucket = "source-bucket-230525"
-    target_bucket = "target-bucket-230525"
+# Importando seus módulos auxiliares
+import extract
+import validate
+import load_file_silver_layer
+import logger_config
 
-    logger.info("🚀 Starting pipeline execution")
-    logger.info(f"Source bucket: {source_bucket} | Target bucket: {target_bucket}")
+## @params: [JOB_NAME]
+args = getResolvedOptions(sys.argv, ['our_first_pipeline'])
 
- # Debug: list files before extraction
-    logger.info("Listing files in source bucket...")
-    list_bucket_objects(source_bucket)
-    # Step 1: Extract
-    logger.info("Step 1: Extracting data from S3")
-    customers_df = read_csv_from_s3(source_bucket, "customers.csv", delimiter=",")
-    items_df = read_csv_from_s3(source_bucket, "Items.csv", delimiter=";")
-    
-    logger.info(f"Customers extracted: {len(customers_df)} rows")
-    logger.info(f"Items extracted: {len(items_df)} rows")
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['our_first_pipeline'], args)
 
-    # Step 2: Validate
-    logger.info("Step 2: Validating data")
-    valid_customers, invalid_customers = validate_customers(customers_df)
-    valid_items, invalid_items = validate_items(items_df)
+# Configuração de logger
+logger = logger_config.get_logger()
 
-    logger.info(f"Valid customers: {len(valid_customers)} | Invalid customers: {len(invalid_customers)}")
-    logger.info(f"Valid items: {len(valid_items)} | Invalid items: {len(invalid_items)}")
+def main():
+    logger.info("Iniciando pipeline ETL no Glue...")
 
-    # Step 3: Load
-    logger.info("Step 3: Writing validated data to S3")
-    try:
-        # Partition items by Satates
-        write_dicts_to_s3_parquet(valid_customers.to_dict(orient="records"),target_bucket, "customers/valid")
-        write_dicts_to_s3_parquet(invalid_customers.to_dict(orient="records"),target_bucket, "customers/invalid")
-        
-        # Partition items by Year/Month from Purchase Date
-        write_items_partitioned(valid_items.to_dict(orient="records"),target_bucket, "items/valid")
-        write_items_partitioned(invalid_items.to_dict(orient="records"),target_bucket, "items/invalid")
+    # 1. Extração dos dados brutos
+    customers_df = extract.read_csv_from_s3(
+        spark,
+        bucket="source-bucket-230525",
+        key="customers.csv"
+    )
+    items_df = extract.read_csv_from_s3(
+        spark,
+        bucket="source-bucket-230525",
+        key="items.csv"
+    )
 
-    except Exception as e:
-        logger.exception(f"Error during load step: {e}")
+    logger.info(f"Clientes lidos: {customers_df.count()} registros")
+    logger.info(f"Itens lidos: {items_df.count()} registros")
 
-    print("✅ Pipeline completed successfully!")
+    # 2. Validação dos dados
+    customers_df = validate.clean_customers(customers_df)
+    items_df = validate.clean_items(items_df)
+
+    # 3. Carregar na camada Silver (Parquet particionado)
+    load_file_silver_layer.write_parquet(
+        df=customers_df,
+        bucket="target-bucket-230525",
+        prefix="customers"
+    )
+    load_file_silver_layer.write_parquet(
+        df=items_df,
+        bucket="target-bucket-230525",
+        prefix="items"
+    )
+
+    logger.info("Pipeline ETL concluído com sucesso.")
 
 if __name__ == "__main__":
-    run_pipeline()
+    main()
+    job.commit()

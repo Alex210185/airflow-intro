@@ -15,4 +15,4 @@ with DAG(
         script_location="s3://airflow-intro-dags/plugins/scripts/main.py",
         region_name="us-east-1",
         aws_conn_id="aws_default",
-    )
+    # )
