@@ -19,6 +19,7 @@ def get_s3_client():
         region_name="us-east-2"
     )
 
+
 def write_dicts_to_s3_parquet(records: list[dict], bucket_name: str, file_key_prefix: str, partition_key: str = None):
     """Write list of dicts to Parquet and upload to S3, optionally partitioned by a column."""
     try:
